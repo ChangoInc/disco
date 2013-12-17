@@ -87,6 +87,16 @@ Possible settings for Disco are as follows:
                 The same path is used for all nodes in the cluster.
                 Default is obtained using ``os.path.join(DISCO_ROOT, 'log')``.
 
+        .. envvar:: DISCO_LOG_FACILITY
+
+                Logging facility that disco uses.
+                Default is ``local7``.
+
+        .. envvar:: DISCO_LOG_LEVEL
+
+                Logging level that disco uses.
+                Default is ``info``.
+
         .. envvar:: DISCO_PID_DIR
 
                 Directory where pid-files are created.
@@ -129,6 +139,11 @@ Possible settings for Disco are as follows:
                 How long to wait before garbage collecting job-generated intermediate and result data.
                 Only results explictly saved to DDFS won't be garbage collected.
                 Default is ``100 * 365 * 24 * 60 * 60`` (100 years).  (Note that this setting does not affect data in DDFS.)
+
+        .. envvar:: DATA_GC_INTERVAL
+
+                How long to wait before garbage collecting purged job data.
+                Default is ``12`` (hours).
 
         .. envvar:: DISCO_WORKER_MAX_MEM
 
@@ -236,6 +251,10 @@ Settings used by DDFS:
 
                 Default is ``''``.
 
+        .. envvar:: DDFS_NODE_STARTUP
+
+                The amount of time to wait for a ddfs_node to startup (in minutes).
+                Default is ``'10'``.
 
 The following settings are used by DDFS to determine the number of replicas for data/metadata to keep
 (it is not recommended to use the provided defaults in a multinode cluster):
@@ -275,6 +294,8 @@ class DiscoSettings(Settings):
         'DISCO_MASTER_CONFIG':   "os.path.join(DISCO_ROOT, '%s.config' % DISCO_NAME)",
         'DISCO_NAME':            "'disco_%s' % DISCO_PORT",
         'DISCO_LOG_DIR':         "os.path.join(DISCO_ROOT, 'log')",
+        'DISCO_LOG_FACILITY':    "'local7'",
+        'DISCO_LOG_LEVEL':       "'info'",
         'DISCO_PID_DIR':         "os.path.join(DISCO_ROOT, 'run')",
         'DISCO_PORT':            "8989",
         'DISCO_ROOT':            "os.path.join(DISCO_HOME, 'root')",
@@ -285,6 +306,7 @@ class DiscoSettings(Settings):
         'DISCO_USER':            "os.getenv('LOGNAME')",
         'DISCO_JOB_OWNER':       "job_owner()",
         'DISCO_WWW_ROOT':        "os.path.join(DISCO_MASTER_HOME, 'www')",
+        'DATA_GC_INTERVAL':      "12",
 # GC
         'DISCO_GC_AFTER':        "100 * 365 * 24 * 60 * 60",
 # PROXY
@@ -314,7 +336,8 @@ class DiscoSettings(Settings):
         'DDFS_TAG_REPLICAS':     "1",
         'DDFS_BLOB_REPLICAS':    "1",
         'DDFS_PARANOID_DELETE':  "''",
-        'DDFS_GC_INITIAL_WAIT':  "''"
+        'DDFS_GC_INITIAL_WAIT':  "''",
+        'DDFS_NODE_STARTUP':     "10"
         }
 
     globals = globals()
