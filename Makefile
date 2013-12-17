@@ -1,11 +1,11 @@
 export
 
-DISCO_VERSION = 0.4.5
-DISCO_RELEASE = 0.4.5
+DISCO_VERSION = 0.5.0a
+DISCO_RELEASE = 0.5.0a
 
 # standard make installation variables
 sysconfdir    = /etc
-prefix        = /usr/local
+prefix        = /opt/disco
 exec_prefix   = $(prefix)
 localstatedir = $(prefix)/var
 datarootdir   = $(prefix)/share
@@ -51,7 +51,7 @@ EBIN  = master/ebin
 ESRC  = master/src
 EDEP  = master/deps
 
-DEPS     = mochiweb lager goldrush
+DEPS     = mochiweb lager lager_syslog syslog goldrush
 EDEPS    = $(foreach dep,$(DEPS),$(EDEP)/$(dep)/ebin)
 ELIBS    = $(ESRC) $(ESRC)/ddfs
 ESOURCES = $(foreach lib,$(ELIBS),$(wildcard $(lib)/*.erl))
@@ -111,7 +111,7 @@ doc-clean:
 doc-test:
 	$(MAKE) -C doc doctest -e
 
-install: install-core install-node install-master
+install: install-core install-node install-master install-erl-syslog
 
 uninstall: uninstall-master uninstall-node
 
@@ -141,6 +141,8 @@ uninstall-node:
 	- rm -Rf $(TARGETLIB) $(TARGETSRV)
 
 install-tests: $(TARGETLIB)/ext $(TARGETLIB)/tests
+
+install-erl-syslog: $(TARGETLIB)/$(EDEP)/syslog/priv/syslog_drv.so
 
 dialyzer: $(EPLT) master
 	$(DIALYZER) --get_warnings -Wno_return -Wunmatched_returns -Werror_handling --plt $(EPLT) -r $(EBIN)
