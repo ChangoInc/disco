@@ -214,11 +214,10 @@ class Master(clx.server.Server):
         def lager_config(log_dir):
             return ['-lager', 'handlers',
                     ('[{lager_console_backend, info},'
-                     +'{lager_file_backend,'
-                     +'[{file,' + '"{0}/error.log"'.format(log_dir)   + '}, {level, error}, {size, 1048576000}, {date, "$D0"}, {count, 5}]},'
-                     +'{lager_file_backend,'
-                     +'[{file,' + '"{0}/console.log"'.format(log_dir) + '}, {level, debug}, {size, 1048576000}, {date, "$D0"}, {count, 5}]}]'),
-                    '-lager', 'error_logger_hwm', '200',
+                     + '{lager_syslog_backend,'
+                     + ' ["disco", ' + '{0},'.format(settings['DISCO_LOG_FACILITY'])
+                     + ' {0}'.format(settings['DISCO_LOG_LEVEL'])
+                     + ']}]'),
                     '-lager', 'crash_log', '"{0}/crash.log"'.format(log_dir)]
 
         SchedulerOptions = ['+K', 'true',
@@ -237,6 +236,8 @@ class Master(clx.server.Server):
                  '-pa', epath('ebin'),
                  '-pa', edep('mochiweb'),
                  '-pa', edep('goldrush'),
+                 '-pa', edep('lager_syslog'),
+                 '-pa', edep('syslog'),
                  '-pa', edep('lager'),
                  '-pa', edep('meck'),
                  '-pa', edep('bear'),
