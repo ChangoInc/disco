@@ -47,6 +47,12 @@ class Program(clx.Program):
             self.settings['DDFS_WRITE_TOKEN'] = token
 
     @classmethod
+    def add_remote_server(cls, command):
+        command.add_option('-S', '--server',
+                           help='the master dns short name.')
+        return command
+
+    @classmethod
     def add_classic_reads(cls, command):
         command.add_option('-R', '--reader',
                            help='input reader to import and use')
@@ -113,8 +119,9 @@ class Program(clx.Program):
 
     def blobs(self, *tags):
         ignore_missing = self.options.ignore_missing
+        server =self.options.server
         for tag in self.prefix_mode(*tags):
-            for replicas in self.ddfs.blobs(tag, ignore_missing=ignore_missing):
+            for replicas in self.ddfs.blobs(tag, ignore_missing=ignore_missing, server=server):
                 yield replicas
 
     def default(self, program, *args):
