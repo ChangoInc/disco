@@ -40,15 +40,19 @@ from disco.cli import OptionParser, Program
 class DDFS(Program):
     pass
 
+@DDFS.add_remote_server
 @DDFS.command
 def attrs(program, tag):
     """Usage: tag
 
     Get the attributes of a tag.
     """
-    for k, v in program.ddfs.attrs(tag).items():
+
+    server=program.options.server
+    for k, v in program.ddfs.attrs(tag, server=server).items():
         print('{0}\t{1}'.format(k, v))
 
+@DDFS.add_remote_server
 @DDFS.add_program_blobs
 @DDFS.command
 def blobs(program, *tags):
@@ -59,6 +63,7 @@ def blobs(program, *tags):
     for replicas in program.blobs(*tags):
         print('\t'.join(replicas))
 
+@DDFS.add_remote_server
 @DDFS.add_job_mode
 @DDFS.add_program_blobs
 @DDFS.command
@@ -76,12 +81,14 @@ def cat(program, *urls):
     from disco.compat import bytes_to_str
 
     ignore_missing = program.options.ignore_missing
+    server = program.options.ignore_missing
     tags, urls     = program.separate_tags(*urls)
 
     def curl(replicas):
         for replica in replicas:
             try:
-                return download(proxy_url(urlresolve(replica, master=program.ddfs.master),
+                return download(proxy_url(urlresolve(replica,
+                                                     master=program.ddfs._getMaster(server)),
                                           to_master=False))
             except Exception as e:
                 sys.stderr.write("{0}\n".format(e))
@@ -111,6 +118,7 @@ chtok.add_option('-w', '--write',
                  help='change the write token')
 
 @DDFS.add_classic_reads
+@DDFS.add_remote_server
 @DDFS.add_program_blobs
 @DDFS.command
 def chunk(program, tag, *urls):
@@ -129,6 +137,7 @@ def chunk(program, tag, *urls):
                                     input_stream=stream,
                                     reader=reader,
                                     replicas=program.options.replicas,
+                                    server=program.options.server,
                                     forceon=[] if not program.options.forceon else
                                         [program.options.forceon],
                                     update=program.options.update)
@@ -143,21 +152,25 @@ chunk.add_option('-u', '--update',
                  action='store_true',
                  help='whether to perform an update or an append')
 
+@DDFS.add_remote_server
 @DDFS.command
 def cp(program, source_tag, target_tag):
     """Usage: source_tag target_tag
 
     Copies one tag to another, overwriting it if it exists.
     """
-    program.ddfs.put(target_tag, program.ddfs.get(source_tag)['urls'])
+    server = program.options.server
+    program.ddfs.put(target_tag, program.ddfs.get(source_tag, server=server)['urls'],
+                     server=server)
 
+@DDFS.add_remote_server
 @DDFS.command
 def delattr(program, tag, attr):
     """Usage: tag attr
 
     Delete an attribute of a tag.
     """
-    program.ddfs.delattr(tag, attr)
+    program.ddfs.delattr(tag, attr, server=program.options.server)
 
 def df(program, *args):
     """Usage: <undefined>
@@ -174,6 +187,7 @@ def du(program, *args):
     """
     raise NotImplementedError("API does not yet support this operation")
 
+@DDFS.add_remote_server
 @DDFS.command
 def exists(program, tag):
     """Usage: tag
@@ -181,10 +195,11 @@ def exists(program, tag):
     Check if a given tag exists.
     Prints 'True' or 'False' and returns the appropriate exit status.
     """
-    if not program.ddfs.exists(tag):
+    if not program.ddfs.exists(tag, server=program.options.server):
         raise Exception("False")
     print("True")
 
+@DDFS.add_remote_server
 @DDFS.add_ignore_missing
 @DDFS.add_prefix_mode
 @DDFS.command
@@ -200,12 +215,13 @@ def find(program, *tags):
     """
     ignore_missing = program.options.ignore_missing
     warn_missing   = program.options.warn_missing
+    server = program.options.server
 
     if warn_missing:
         ignore_missing = True
 
     for tag in program.prefix_mode(*tags):
-        found = program.ddfs.walk(tag, ignore_missing=ignore_missing)
+        found = program.ddfs.walk(tag, ignore_missing=ignore_missing, server=server)
         for tagpath, subtags, blobs in found:
             if subtags == blobs == None:
                 print("Tag not found: {0}".format("\t".join(tagpath)))
@@ -218,21 +234,25 @@ find.add_option('-w', '--warn-missing',
                 action='store_true',
                 help='warn about missing tags')
 
+@DDFS.add_remote_server
 @DDFS.command
 def get(program, tag):
     """Usage: tag
 
     Gets the contents of the tag.
     """
-    print(program.ddfs.get(tag))
+    server = program.options.server
+    print(program.ddfs.get(tag, server=server))
 
+@DDFS.add_remote_server
 @DDFS.command
 def getattr(program, tag, attr):
     """Usage: tag attr
 
     Get an attribute of a tag.
     """
-    print(program.ddfs.getattr(tag, attr))
+    server = program.options.server
+    print(program.ddfs.getattr(tag, attr, server=server))
 
 def grep(program, *args):
     """Usage: <undefined>
@@ -241,6 +261,7 @@ def grep(program, *args):
     """
     raise NotImplementedError("Distributed grep not yet implemented.")
 
+@DDFS.add_remote_server
 @DDFS.add_program_blobs
 @DDFS.command
 def ls(program, *prefixes):
@@ -249,9 +270,10 @@ def ls(program, *prefixes):
     List all tags starting with prefix[es].
     """
     from disco.error import CommError
+    server = program.options.server
 
     for prefix in prefixes or ('', ):
-        for tag in program.ddfs.list(prefix):
+        for tag in program.ddfs.list(prefix, server):
             print(tag)
             if program.options.recursive:
                 try:
@@ -264,6 +286,7 @@ ls.add_option('-r', '--recursive',
               action='store_true',
               help='lists the blobs reachable from each tag')
 
+@DDFS.add_remote_server
 @DDFS.command
 def push(program, tag, *files):
     """Usage: tag [file ...]
@@ -272,6 +295,7 @@ def push(program, tag, *files):
     """
     replicas = program.options.replicas
     tarballs = program.options.tarballs
+    server = program.options.server
     forceon= [] if not program.options.forceon else [program.options.forceon]
 
     blobs = [] if tarballs else [file for file in files
@@ -292,7 +316,7 @@ def push(program, tag, *files):
             else:
                 print("{0} is a directory (not pushing).".format(file))
     print("pushing...")
-    program.ddfs.push(tag, blobs, replicas=replicas, forceon=forceon)
+    program.ddfs.push(tag, blobs, replicas=replicas, forceon=forceon, server=server)
 
 push.add_option('-E', '--exclude',
                 help='exclude tar blobs that contain string')
@@ -312,6 +336,7 @@ push.add_option('-z', '--compress',
                 action='store_true',
                 help='compress tar blobs when pushing')
 
+@DDFS.add_remote_server
 @DDFS.command
 def put(program, tag, *urls):
     """Usage: tag [url ...]
@@ -320,8 +345,10 @@ def put(program, tag, *urls):
     Urls may be quoted whitespace-separated lists of replicas.
     """
     from disco.util import listify
-    program.ddfs.put(tag, [listify(i) for i in program.input(*urls)])
+    program.ddfs.put(tag, [listify(i) for i in program.input(*urls)],
+                     server=program.options.server)
 
+@DDFS.add_remote_server
 @DDFS.add_prefix_mode
 @DDFS.command
 def rm(program, *tags):
@@ -330,16 +357,18 @@ def rm(program, *tags):
     Remove the tag[s].
     """
     for tag in program.prefix_mode(*tags):
-        print(program.ddfs.delete(tag))
+        print(program.ddfs.delete(tag, server=program.options.server))
 
+@DDFS.add_remote_server
 @DDFS.command
 def setattr(program, tag, attr, val):
     """Usage: tag attr val
 
     Set the value of an attribute of a tag.
     """
-    program.ddfs.setattr(tag, attr, val)
+    program.ddfs.setattr(tag, attr, val, server=program.options.server)
 
+@DDFS.add_remote_server
 @DDFS.add_prefix_mode
 @DDFS.command
 def stat(program, *tags):
@@ -348,9 +377,10 @@ def stat(program, *tags):
     Display information about the tag[s].
     """
     for tag in program.prefix_mode(*tags):
-        tag = program.ddfs.get(tag)
+        tag = program.ddfs.get(tag, server=program.options.server)
         print('\t'.join('{0}'.format(tag[key]) for key in tag.keys() if key != 'urls'))
 
+@DDFS.add_remote_server
 @DDFS.command
 def tag(program, tag, *urls):
     """Usage: tag [url ...]
@@ -359,8 +389,10 @@ def tag(program, tag, *urls):
     Urls may be quoted whitespace-separated lists of replicas.
     """
     from disco.util import listify
-    program.ddfs.tag(tag, [listify(i) for i in program.input(*urls)])
+    program.ddfs.tag(tag, [listify(i) for i in program.input(*urls)],
+                     server=program.options.server)
 
+@DDFS.add_remote_server
 @DDFS.command
 def touch(program, *tags):
     """Usage: [tag ...]
@@ -368,8 +400,9 @@ def touch(program, *tags):
     Creates the tag[s] if they do not exist.
     """
     for tag in tags:
-        program.ddfs.tag(tag, [])
+        program.ddfs.tag(tag, [], server=program.options.server)
 
+@DDFS.add_remote_server
 @DDFS.add_prefix_mode
 @DDFS.command
 def urls(program, *tags):
@@ -378,9 +411,10 @@ def urls(program, *tags):
     List the urls pointed to by the tag[s].
     """
     for tag in program.prefix_mode(*tags):
-        for replicas in program.ddfs.urls(tag):
+        for replicas in program.ddfs.urls(tag, server=program.options.server):
             print('\t'.join(replicas))
 
+@DDFS.add_remote_server
 @DDFS.add_job_mode
 @DDFS.add_classic_reads
 @DDFS.add_program_blobs

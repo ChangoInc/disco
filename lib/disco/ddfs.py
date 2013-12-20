@@ -91,11 +91,12 @@ class DDFS(object):
     def job_tag(self, jobname):
         return 'disco:job:results:{0}'.format(jobname)
 
-    def attrs(self, tag, token=None):
+    def attrs(self, tag, token=None, server=None):
         """Get a list of the attributes of the tag ``tag`` and their values."""
-        return self._download(canonizetag(tag), token=token).get('user-data')
+        server = self._getMaster(server)
+        return self._download(canonizetag(tag), token=token, server=server).get('user-data')
 
-    def blobs(self, tag, ignore_missing=True, token=None):
+    def blobs(self, tag, ignore_missing=True, token=None, server=None):
         """
         Walks the tag graph starting at `tag`.
 
@@ -105,21 +106,30 @@ class DDFS(object):
         :param ignore_missing: Whether or not missing tags will raise a
                                :class:`disco.error.CommError`.
         """
+        server = self._getMaster(server)
         for path, tags, blobs in self.walk(tag,
                                            ignore_missing=ignore_missing,
-                                           token=token):
+                                           token=token, server=server):
             if tags != blobs:
                 for replicas in blobs:
                     yield replicas
 
-    def delattr(self, tag, attr, token=None):
+    def delattr(self, tag, attr, token=None, server=None):
         """Delete the attribute ``attr`` of the tag ``tag``."""
-        return self._download(self._tagattr(tag, attr),
+        return self._download(self._tagattr(tag, attr, server=server),
                               method='DELETE',
-                              token=token)
+                              token=token, server=server)
+
+    def _getMaster(self, server):
+        master = server if server else self.master
+        if master.find(':') == -1:
+            port = DiscoSettings()['DISCO_PORT']
+            master += ":" + str(port)
+        return master
 
     def chunk(self, tag, urls,
               replicas=None,
+              server=None,
               forceon=[],
               retries=10,
               delayed=False,
@@ -133,6 +143,7 @@ class DDFS(object):
         """
         from disco.core import classic_iterator
 
+        server = self._getMaster(server)
         if 'reader' not in kwargs:
             kwargs['reader'] = None
 
@@ -145,7 +156,7 @@ class DDFS(object):
             return self.safe_name('{0}-{1}'.format(os.path.basename(url), n))
 
         blobs = [self._push((BytesIO(chunk), chunk_name(reps, n)),
-                            replicas=replicas, forceon=forceon,
+                            replicas=replicas, server=server, forceon=forceon,
                             retries=retries)
                  for reps in urls
                  for n, chunk in enumerate(chunk_iter(reps))]
@@ -153,17 +164,17 @@ class DDFS(object):
                          blobs,
                          delayed=delayed,
                          update=update,
-                         token=token),
+                         token=token, server=server),
                 blobs)
 
-    def delete(self, tag, token=None):
+    def delete(self, tag, token=None, server=None):
         """Delete ``tag``."""
-        return self._download(canonizetag(tag), method='DELETE', token=token)
+        return self._download(canonizetag(tag), method='DELETE', token=token, server=server)
 
-    def exists(self, tag):
+    def exists(self, tag, server=None):
         """Returns whether or not ``tag`` exists."""
         try:
-            if open_remote(self._resolve(canonizetag(tag))):
+            if open_remote(self._resolve(canonizetag(tag), server=server)):
                 return True
         except CommError as e:
             if e.code == 401:
@@ -199,21 +210,22 @@ class DDFS(object):
                     else:
                         raise
 
-    def get(self, tag, token=None):
+    def get(self, tag, token=None, server=None):
         """Return the tag object stored at ``tag``."""
-        return self._download(canonizetag(tag), token=token)
+        return self._download(canonizetag(tag), token=token, server=server)
 
-    def getattr(self, tag, attr, token=None):
+    def getattr(self, tag, attr, token=None, server=None):
         """Return the value of the attribute ``attr`` of the tag ``tag``."""
-        return self._download(self._tagattr(tag, attr), token=token)
+        return self._download(self._tagattr(tag, attr, server=server), token=token, server=server)
 
-    def urls(self, tag, token=None):
+    def urls(self, tag, token=None, server=None):
         """Return the urls in the ``tag``."""
-        return self.get(tag, token=token)['urls']
+        return self.get(tag, token=token, server=server)['urls']
 
-    def list(self, prefix=''):
+    def list(self, prefix='', server=None):
         """Return a list of all tags starting with ``prefix``."""
-        return self._download('{0}/ddfs/tags/{1}'.format(self.master, prefix))
+        server = self._getMaster(server)
+        return self._download('{0}/ddfs/tags/{1}'.format(server, prefix))
 
     def pull(self, tag, blobfilter=lambda x: True, token=None):
         """
@@ -245,6 +257,7 @@ class DDFS(object):
              files,
              replicas=None,
              forceon=[],
+             server=None,
              retries=10,
              delayed=False,
              update=False,
@@ -259,6 +272,7 @@ class DDFS(object):
                       they will be used as prefixes by DDFS for the blobnames.
                       Names may only contain chars in ``r'[^A-Za-z0-9_\-@:]'``.
         """
+        server = self._getMaster(server)
         def aim(tuple_or_path):
             if isinstance(tuple_or_path, basestring):
                 source = tuple_or_path
@@ -267,11 +281,11 @@ class DDFS(object):
                 source, target = tuple_or_path
             return source, target
 
-        urls = [self._push(aim(f), replicas=replicas, forceon=forceon, retries=retries)
+        urls = [self._push(aim(f), replicas=replicas, server=server, forceon=forceon, retries=retries)
                 for f in files]
-        return self.tag(tag, urls, delayed=delayed, update=update, token=token), urls
+        return self.tag(tag, urls, delayed=delayed, update=update, token=token, server=server), urls
 
-    def put(self, tag, urls, token=None):
+    def put(self, tag, urls, token=None, server=None):
         """Put the list of ``urls`` to the tag ``tag``.
 
         .. warning::
@@ -281,7 +295,7 @@ class DDFS(object):
         """
         return self._upload(canonizetag(tag),
                             StringIO(json.dumps(urls)),
-                            token=token)
+                            token=token, server=server)
 
     def save(self, jobname, paths, retries=600):
         tag = self.job_tag(jobname)
@@ -289,20 +303,20 @@ class DDFS(object):
         self.push(tag, blobs, retries=retries, delayed=True, update=True)
         return tag
 
-    def setattr(self, tag, attr, val, token=None):
+    def setattr(self, tag, attr, val, token=None, server=None):
         """Set the value of the attribute ``attr`` of the tag ``tag``."""
-        return self._upload(self._tagattr(tag, attr),
+        return self._upload(self._tagattr(tag, attr, server=server),
                             StringIO(json.dumps(val)),
-                            token=token)
+                            token=token, server=server)
 
-    def tag(self, tag, urls, token=None,  **kwargs):
+    def tag(self, tag, urls, token=None, server=None, **kwargs):
         """Append the list of ``urls`` to the ``tag``."""
         defaults = {'delayed': False, 'update': False}
         defaults.update(kwargs)
         url = '{0}?{1}'.format(canonizetag(tag),
                                '&'.join('{0}={1}'.format(k, '1' if v else '')
                                         for k, v in defaults.items()))
-        return self._download(url, json.dumps(urls), token=token)
+        return self._download(url, json.dumps(urls), token=token, server=server)
 
     def tarblobs(self, tarball, compress=True, include=None, exclude=None):
         import tarfile, sys, gzip, os
@@ -329,7 +343,7 @@ class DDFS(object):
                 name = DDFS.safe_name(member.name) + suffix
                 yield name, buf, size
 
-    def walk(self, tag, ignore_missing=True, tagpath=(), token=None):
+    def walk(self, tag, ignore_missing=True, tagpath=(), token=None, server=None):
         """
         Walks the tag graph starting at `tag`.
 
@@ -340,9 +354,10 @@ class DDFS(object):
                                :class:`disco.error.CommError`.
         """
         tagpath += (canonizetag(tag), )
+        server = self._getMaster(server)
 
         try:
-            urls        = self.get(tag, token=token).get('urls', [])
+            urls        = self.get(tag, token=token, server=server).get('urls', [])
             tags, blobs = partition(urls, istag)
             tags        = canonizetags(tags)
             yield tagpath, tags, blobs
@@ -358,7 +373,7 @@ class DDFS(object):
             for child in self.walk(next_tag,
                                    ignore_missing=ignore_missing,
                                    tagpath=tagpath,
-                                   token=token):
+                                   token=token, server=server):
                 yield child
 
     def _copy(self, src, dst):
@@ -371,13 +386,14 @@ class DDFS(object):
             dst.write(b)
         return s
 
-    def _push(self, source_target, replicas=None, forceon=[], exclude=[], **kwargs):
+    def _push(self, source_target, replicas=None, server=None, forceon=[],
+              exclude=[], **kwargs):
         source, target = source_target
         qs = urlencode([(k, v) for k, v in (('exclude', ','.join(exclude)),
                                             ('include', ','.join(forceon)),
                                             ('replicas', replicas)) if v])
         urls = self._download('{0}/ddfs/new_blob/{1}?{2}'
-                              .format(self.master, target, qs))
+                              .format(server, target, qs))
         try:
             return [json.loads(bytes_to_str(url))
                     for url in self._upload(urls, source, to_master=False, **kwargs)]
@@ -385,12 +401,13 @@ class DDFS(object):
             scheme, (host, port), path = urlsplit(e.url)
             return self._push((source, target),
                               replicas=replicas,
+                              server=server,
                               forceon=forceon,
                               exclude=exclude + [host],
                               **kwargs)
 
-    def _tagattr(self, tag, attr):
-        return '{0}/{1}'.format(self._resolve(canonizetag(tag)), attr)
+    def _tagattr(self, tag, attr, server=None):
+        return '{0}/{1}'.format(self._resolve(canonizetag(tag), server=server), attr)
 
     def _token(self, url, token, method):
         if token is None:
@@ -403,24 +420,27 @@ class DDFS(object):
                 return token if isinstance(token, basestring) else None
         return token
 
-    def _resolve(self, url):
-        return urlresolve(url, master=self.master)
+    def _resolve(self, url, server=None):
+        server = self._getMaster(server)
+        return urlresolve(url, master=server)
 
-    def _download(self, url, data=None, token=None, method='GET', to_master=True):
+    def _download(self, url, data=None, token=None, method='GET', to_master=True, server=None):
+        server = self._getMaster(server)
         byts = download(self._resolve(proxy_url(url,
                                                 proxy=self.proxy,
                                                 meth=method,
-                                                to_master=to_master)),
+                                                to_master=to_master), server),
                         data=data,
                         method=method,
                         token=self._token(url, token, method))
         return json.loads(bytes_to_str(byts))
 
-    def _upload(self, urls, source, token=None, to_master=True, **kwargs):
+    def _upload(self, urls, source, token=None, to_master=True, server=None, **kwargs):
+        server = self._getMaster(server)
         urls = [self._resolve(proxy_url(url,
                                         proxy=self.proxy,
                                         meth='PUT',
-                                        to_master=to_master))
+                                        to_master=to_master), server=server)
                 for url in iterify(urls)]
         url = urls[0]
         return upload(urls, source, token=self._token(url, token, 'PUT'), **kwargs)
